@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+gunicorn
+python-dotenv
+pydantic
+pytest
+sqlalchemy
+pyodbc
+pandas
+numpy
+openpyxl
+Pillow
+matplotlib
+requests
+psutil

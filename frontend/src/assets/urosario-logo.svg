@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" role="img" aria-label="Universidad del Rosario logo">
+  <rect width="320" height="80" fill="#b71c1c" rx="18" />
+  <rect x="220" y="12" width="80" height="56" fill="#ffc107" rx="8" />
+  <text x="24" y="48" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">UR</text>
+  <text x="122" y="28" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">Universidad del Rosario</text>
+  <text x="122" y="46" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">Portal Encuestas</text>
+</svg>
