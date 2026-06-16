@@ -7,10 +7,9 @@ from pathlib import Path
 from typing import List, Optional
 import logging
 
-# Agregamos la raíz del repositorio al PYTHONPATH para que los módulos raíz restaurados
-# como orquestador_principal_flujo_encuestas.py y configuracion_sistema_encuestas.py
-# sean importables cuando el backend se ejecute desde portal/backend.
-ROOT_DIR = Path(__file__).resolve().parents[2]
+# Agregamos la raíz del repositorio al PYTHONPATH para que los módulos raíz
+# sean importables cuando el backend se ejecute.
+ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
@@ -84,6 +83,16 @@ def health():
         "database": os.getenv("SQL_DATABASE", "DWHEncuestasPercepcion"),
         "database_error": DATABASE_STARTUP_ERROR,
     }
+
+
+@app.get("/api/registros/anio-actual")
+def get_registros_anio_actual():
+    from .database import get_total_registros_anio_actual
+    try:
+        total = get_total_registros_anio_actual()
+        return {"year": datetime.now().year, "total_registros": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def get_db():

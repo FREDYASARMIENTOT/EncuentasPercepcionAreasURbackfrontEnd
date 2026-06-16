@@ -1,0 +1,5 @@
+[PORTAL] Iniciando comando: cmd.exe /c F:\ETL_DITIC\Lanzador_encuestapercepcion.bat --area TODAS --anio 2026 --mes 5
+'F:\ETL_DITIC\Lanzador_encuestapercepcion.bat' is not recognized as an internal or external command,
+operable program or batch file.
+
+[PORTAL] Proceso PID 29024 finalizo con codigo 1.

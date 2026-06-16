@@ -1,0 +1,4 @@
+2026-06-10 17:42:59,798 - ERROR - Error inicializando Azure Blob Client: client_id should be the id of a Microsoft Entra application
+2026-06-10 17:42:59,798 - ERROR - \u274c Error subiendo el archivo F:\ETL_DITIC\EncuestasPercepciónAzure\Logs\portal_jobs\job_56_20260610_174259.log a Azure: client_id should be the id of a Microsoft Entra application
+2026-06-10 17:42:59,825 - ERROR - Error inicializando Azure Blob Client: client_id should be the id of a Microsoft Entra application
+2026-06-10 17:42:59,826 - ERROR - Error leyendo blob prueba_ficticia.log de Azure: client_id should be the id of a Microsoft Entra application

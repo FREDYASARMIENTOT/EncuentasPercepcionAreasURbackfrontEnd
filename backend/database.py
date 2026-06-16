@@ -1,9 +1,22 @@
 import os
+import io
+import logging
 import urllib.parse
+from datetime import datetime
+import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
+
+# Intentar importar dependencias de Azure
+try:
+    from azure.storage.blob import BlobServiceClient
+    from azure.identity import DefaultAzureCredential
+except ImportError:
+    pass
+
+logger = logging.getLogger(__name__)
 
 env_path = Path(__file__).resolve().parents[0] / ".env"
 if env_path.exists():
@@ -55,3 +68,50 @@ SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocom
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+def get_total_registros_anio_actual() -> int:
+    """
+    Obtiene el conteo de registros del año actual.
+    Intento 1: Parquet en Azure Blob Storage.
+    Intento 2 (Fallback): Consulta SQL Server.
+    """
+    try:
+        azure_url = os.getenv("AZURE_STORAGE_ACCOUNT_URL")
+        container_name = os.getenv("AZURE_CONTAINER_NAME")
+        
+        if not azure_url or not container_name:
+            raise ValueError("Las variables de entorno para Azure Blob Storage no están configuradas")
+            
+        file_path = "EncuestasPercepcion/VistaEncuestaPercepcion2026.parquet"
+        
+        sas_token = os.getenv("AZURE_SAS_TOKEN")
+        if sas_token:
+            blob_service_client = BlobServiceClient(account_url=azure_url, credential=sas_token)
+        else:
+            credential = DefaultAzureCredential()
+            blob_service_client = BlobServiceClient(account_url=azure_url, credential=credential)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_path)
+        
+        download_stream = blob_client.download_blob()
+        parquet_data = io.BytesIO(download_stream.readall())
+        
+        df = pd.read_parquet(parquet_data)
+        
+        current_year = datetime.now().year
+        if 'Anio' not in df.columns:
+            raise KeyError("La columna 'Anio' no se encuentra en el archivo Parquet")
+            
+        count = df[df['Anio'] == current_year].shape[0]
+        return count
+        
+    except Exception as e:
+        logger.warning(f"Intento 1 (Azure Blob Storage) falló: {e}. Usando contingencia (Base de Datos Local).")
+        
+        try:
+            with SessionLocal() as session:
+                query = text("SELECT COUNT(*) FROM dbo.view_respuestas_encuesta_percepcion_historica_optimizada WHERE Año = YEAR(GETDATE())")
+                result = session.execute(query).scalar()
+                return result or 0
+        except Exception as sql_e:
+            logger.error(f"Error en el Intento 2 (Fallback SQL): {sql_e}")
+            raise Exception("Ambos métodos de obtención de datos fallaron") from sql_e

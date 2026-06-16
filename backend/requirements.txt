@@ -13,3 +13,6 @@ Pillow
 matplotlib
 requests
 psutil
+azure-storage-blob
+azure-identity
+pyarrow
