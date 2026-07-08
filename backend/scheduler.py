@@ -8,14 +8,32 @@ TASK_NAME_DEFAULT = os.getenv("TASK_NAME", "LanzadorEncuestasPercepcion")
 
 
 def get_batch_path() -> str:
+    repo_root = Path(__file__).resolve().parents[1]
     batch_path = os.getenv("BATCH_PATH")
+    candidates = []
+
     if batch_path:
-        absolute = Path(batch_path).expanduser()
-        if not absolute.is_absolute():
-            absolute = Path(__file__).resolve().parent / batch_path
-    else:
-        absolute = Path(__file__).resolve().parents[2] / "Lanzador_encuestapercepcion.bat"
-    return str(absolute.resolve(strict=False))
+        explicit = Path(batch_path).expanduser()
+        candidates.append(explicit)
+        if not explicit.is_absolute():
+            candidates.extend([
+                Path(__file__).resolve().parent / explicit,
+                repo_root / explicit,
+                repo_root.parent / explicit,
+            ])
+
+    candidates.extend([
+        repo_root / "ARCHIVOS_NO_DESPLIEGUE" / "Lanzador_encuestapercepcion.bat",
+        repo_root / "Lanzador_encuestapercepcion.bat",
+        repo_root.parent / "Lanzador_encuestapercepcion.bat",
+    ])
+
+    for candidate in candidates:
+        resolved = candidate.resolve(strict=False)
+        if resolved.exists():
+            return str(resolved)
+
+    return str((repo_root / "ARCHIVOS_NO_DESPLIEGUE" / "Lanzador_encuestapercepcion.bat").resolve(strict=False))
 
 
 def run_command(args):

@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
@@ -17,6 +18,24 @@ if str(ROOT_DIR) not in sys.path:
 
 from backend.database import get_connection_string, engine
 from backend.scheduler import get_batch_path
+from backend.email_utils import send_completion_email
+
+
+def test_launcher_batch_invocation_uses_python_environment(tmp_path):
+    batch_path = Path(get_batch_path())
+    assert batch_path.exists(), f"Batch file not found: {batch_path}"
+
+    result = subprocess.run(
+        ["cmd.exe", "/c", str(batch_path), "--anio", "2026", "--mes", "7", "--area", "CRAI"],
+        cwd=str(batch_path.parent),
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env={**os.environ, "SKIP_PAUSE_ON_EXIT": "1"},
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert "LogLanzador_Encuestas" in result.stdout + result.stderr
 
 
 def test_connection_string_is_valid():
@@ -28,10 +47,34 @@ def test_connection_string_is_valid():
     assert "Database=" in unquoted
 
 
+def test_connection_string_prefers_data_source_settings(monkeypatch):
+    monkeypatch.setenv("DB_DATA_SERVER", "SRVSQLAPPSWEB\\URSQL01,14331")
+    monkeypatch.setenv("DB_DATA_NAME", "bdpercepcion")
+    monkeypatch.setenv("DB_DATA_USER", "USR_dbpercepcion")
+    monkeypatch.setenv("DB_DATA_PASS", "secret")
+    monkeypatch.delenv("SQL_SERVER", raising=False)
+    monkeypatch.delenv("SQL_DATABASE", raising=False)
+    monkeypatch.delenv("SQL_USER", raising=False)
+    monkeypatch.delenv("SQL_PASSWORD", raising=False)
+
+    connection_string = get_connection_string()
+    unquoted = urllib.parse.unquote(connection_string)
+
+    assert "SRVSQLAPPSWEB\\URSQL01,14331" in unquoted
+    assert "bdpercepcion" in unquoted
+    assert "USR_dbpercepcion" in unquoted
+
+
 def test_batch_path_exists():
     batch_file = Path(get_batch_path())
     assert batch_file.exists(), f"Batch file not found: {batch_file}"
     assert batch_file.is_file()
+
+
+def test_send_completion_email_handles_missing_credentials(monkeypatch):
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASS", raising=False)
+    assert send_completion_email("subject", "body") is False
 
 
 def test_sharepoint_configuration_format_is_valid():

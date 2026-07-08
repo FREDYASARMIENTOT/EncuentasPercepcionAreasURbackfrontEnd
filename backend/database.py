@@ -27,12 +27,12 @@ else:
 Base = declarative_base()
 
 def get_connection_string() -> str:
-    server = os.getenv("SQL_SERVER", "SRVBISQL01\\SQLPRBI")
-    database = os.getenv("SQL_DATABASE", "DWHEncuestasPercepcion")
+    server = os.getenv("DB_DATA_SERVER") or os.getenv("SQL_SERVER", "SRVBISQL01\\SQLPRBI")
+    database = os.getenv("DB_DATA_NAME") or os.getenv("SQL_DATABASE", "DWHEncuestasPercepcion")
     driver = os.getenv("SQL_DRIVER", "ODBC Driver 18 for SQL Server")
-    trusted = os.getenv("SQL_TRUSTED_CONNECTION", "yes").lower() in ("yes", "true", "1")
-    user = os.getenv("SQL_USER")
-    password = os.getenv("SQL_PASSWORD")
+    user = os.getenv("DB_DATA_USER") or os.getenv("SQL_USER")
+    password = os.getenv("DB_DATA_PASS") or os.getenv("SQL_PASSWORD")
+    trusted = os.getenv("SQL_TRUSTED_CONNECTION", "yes").lower() in ("yes", "true", "1") and not (user and password)
 
     if trusted:
         params = (
@@ -58,7 +58,7 @@ def get_connection_string() -> str:
             "LoginTimeout=5;"
         )
     else:
-        raise ValueError("SQL connection is not configured. Set SQL_TRUSTED_CONNECTION=yes or provide SQL_USER and SQL_PASSWORD.")
+        raise ValueError("SQL connection is not configured. Set SQL_TRUSTED_CONNECTION=yes or provide DB_DATA_USER/DB_DATA_PASS (or SQL_USER/SQL_PASSWORD).")
 
     return "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(params)
 

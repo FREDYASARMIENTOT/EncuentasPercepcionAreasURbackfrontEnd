@@ -38,6 +38,14 @@ El backend es un servicio FastAPI que:
 
 Se incluye un test de backend para la carga `CRAI 2026-05` en `backend/tests/test_orquestador.py`.
 
+### Verificación de conexiones
+
+Antes de lanzar procesos de orquestación se recomienda verificar lo siguiente:
+- `pytest backend/tests/test_connectivity.py -q`
+- El backend ahora usa preferentemente `DB_DATA_SERVER`, `DB_DATA_NAME`, `DB_DATA_USER` y `DB_DATA_PASS` si están definidos, y luego cae a `SQL_SERVER` / `SQL_DATABASE`.
+- El lanzador batch usa el intérprete de Python del entorno `EncuestasBackendAzure` para garantizar que las dependencias del proyecto estén disponibles.
+- El acceso al blob de Azure se valida con las variables `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_CONTAINER_NAME` y `AZURE_SAS_TOKEN`.
+
 ## Frontend
 
 ### Qué hace
