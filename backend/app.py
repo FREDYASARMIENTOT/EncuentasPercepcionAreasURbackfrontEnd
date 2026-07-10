@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List, Optional
 import logging
 
+import pandas as pd
+
 # Agregamos la raíz del repositorio al PYTHONPATH para que los módulos raíz
 # sean importables cuando el backend se ejecute.
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -35,6 +37,7 @@ from .database import SessionLocal, engine, init_db
 from .models import Area, JobParametro, JobEjecucion, CargaArea, Schedule
 from .scheduler import create_monthly_task, delete_task, get_task_status, run_now, get_batch_path
 from .orquestador import ejecutar_orquestador_batch
+from .orquestador_parquet import get_parquet_launcher, get_parquet_status, ParquetReader
 from .schema import (
     AreaModel,
     JobParamCreate,
@@ -969,6 +972,204 @@ def run_orquestador(request: OrquestadorRequest, db=Depends(get_db)):
 def task_status():
     status = get_task_status()
     return JobStatusModel(**status)
+
+
+# =============================================================================
+# ENDPOINTS PARQUET - Consulta de encuestas desde archivo parquet
+# =============================================================================
+
+@app.get("/api/parquet/status")
+def parquet_status():
+    """Obtiene el estado del parquet y datos disponibles."""
+    try:
+        return get_parquet_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estado del parquet: {str(e)}")
+
+
+@app.get("/api/parquet/info")
+def parquet_info():
+    """Información básica del parquet cargado."""
+    try:
+        launcher = get_parquet_launcher()
+        return launcher.get_parquet_info()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/parquet/reload")
+def parquet_reload():
+    """Fuerza la recarga del parquet desde la fuente original."""
+    try:
+        launcher = get_parquet_launcher()
+        info = launcher.reload_parquet()
+        return {"status": "ok", "message": "Parquet recargado", "info": info}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/parquet/areas/{anio}")
+def parquet_areas(anio: int):
+    """Obtiene las áreas disponibles para un año específico desde el parquet."""
+    try:
+        launcher = get_parquet_launcher()
+        areas = launcher.get_areas_disponibles(anio)
+        return {"anio": anio, "areas": areas, "total": len(areas)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/parquet/meses/{anio}")
+def parquet_meses(anio: int):
+    """Obtiene los meses disponibles para un año específico desde el parquet."""
+    try:
+        launcher = get_parquet_launcher()
+        meses = launcher.get_meses_disponibles(anio)
+        return {"anio": anio, "meses": meses}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/parquet/resumen/{anio}")
+def parquet_resumen(anio: int, mes: int = None, area: str = None):
+    """Obtiene un resumen estadístico de los datos del parquet."""
+    try:
+        launcher = get_parquet_launcher()
+        resumen = launcher.get_resumen_datos(anio, mes, area)
+        return resumen
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ParquetConsultaRequest(BaseModel):
+    anio: int
+    mes: Optional[int] = None
+    area: Optional[str] = None
+    sede: Optional[str] = None
+    servicio: Optional[str] = None
+    encuesta: Optional[str] = None
+
+
+@app.post("/api/parquet/consulta")
+def parquet_consulta(request: ParquetConsultaRequest):
+    """
+    Consulta datos filtrados desde el parquet.
+    Acepta múltiples criterios de filtrado opcionales.
+    """
+    try:
+        df = ParquetReader.filtrar_datos_avanzado(
+            anio=request.anio,
+            mes=request.mes,
+            area=request.area,
+            sede=request.sede,
+            servicio=request.servicio,
+            encuesta=request.encuesta
+        )
+        
+        if df.empty:
+            return {"rows": 0, "data": []}
+        
+        # Limitar a 10000 filas para evitar respuestas muy grandes
+        max_rows = 10000
+        if len(df) > max_rows:
+            df = df.head(max_rows)
+        
+        # Convertir a JSON (manejando tipos no serializables)
+        data = df.where(pd.notnull(df), None).to_dict(orient='records')
+        
+        return {"rows": len(data), "data": data, "total_rows": len(df)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ParquetExportarRequest(BaseModel):
+    anio: int
+    mes: int
+    area: str
+    output_dir: Optional[str] = None
+
+
+@app.post("/api/parquet/exportar")
+def parquet_exportar(request: ParquetExportarRequest, db=Depends(get_db)):
+    """
+    Procesa y exporta datos del parquet a Excel.
+    Registra la ejecución en el historial del portal.
+    """
+    try:
+        launcher = get_parquet_launcher()
+        
+        # Resolver área
+        area_id = None
+        if request.area and request.area.upper() != "TODAS":
+            area_id = resolve_area_id(db, request.area)
+        
+        # Ejecutar procesamiento
+        result = launcher.ejecutar_para_combinacion(
+            anio=request.anio,
+            mes=request.mes,
+            area=request.area,
+            area_id=area_id,
+            tipo_carga="mensual",
+            usuario="portal"
+        )
+        
+        if result["success"]:
+            return {
+                "status": "ok",
+                "message": f"Exportación completada para {request.area} | {request.mes}/{request.anio}",
+                "stats": result.get("stats"),
+                "carga_id": result.get("carga_id")
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Error desconocido"))
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en parquet_exportar: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error exportando: {str(e)}")
+
+
+@app.post("/api/parquet/ejecutar-lote")
+def parquet_ejecutar_lote(anio: int, meses: List[int] = None, areas: List[str] = None, db=Depends(get_db)):
+    """
+    Ejecuta el procesamiento por lotes para múltiples combinaciones de mes/área.
+    Si no se especifican meses/áreas, procesa todos los disponibles.
+    """
+    try:
+        launcher = get_parquet_launcher()
+        
+        if meses is None:
+            meses = launcher.get_meses_disponibles(anio)
+        if areas is None:
+            areas = launcher.get_areas_disponibles(anio)
+        
+        resultados = []
+        for mes in meses:
+            for area in areas:
+                area_id = resolve_area_id(db, area) if area and area.upper() != "TODAS" else None
+                result = launcher.ejecutar_para_combinacion(
+                    anio=anio, mes=mes, area=area,
+                    area_id=area_id, tipo_carga="mensual", usuario="portal"
+                )
+                resultados.append({
+                    "anio": anio, "mes": mes, "area": area,
+                    "success": result["success"],
+                    "rows": result.get("stats", {}).get("rows_processed", 0) if result["success"] else 0,
+                    "error": result.get("error")
+                })
+        
+        exitosos = sum(1 for r in resultados if r["success"])
+        return {
+            "status": "ok",
+            "total_combinaciones": len(resultados),
+            "exitosos": exitosos,
+            "fallidos": len(resultados) - exitosos,
+            "resultados": resultados
+        }
+    except Exception as e:
+        logger.error(f"Error en parquet_ejecutar_lote: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/{full_path:path}")
 def spa_catch_all(full_path: str):

@@ -2,6 +2,31 @@
 
 Repositorio: https://github.com/FREDYASARMIENTOT/EncuentasPercepcionAreasURbackfrontEnd
 
+## ⚙️ Backend (EncuestasBackendAzure)
+
+El backend de este proyecto es **EncuestasBackendAzure**. Para trabajar con él:
+
+- **Nombre del entorno Conda:** `EncuestasBackendAzure`
+- **Ruta del backend:** `F:\ETL_DITIC\EncuestasPercepciónAzure\backend`
+- **Ruta raíz del proyecto:** `F:\ETL_DITIC\EncuestasPercepciónAzure`
+
+### Comandos para iniciar el backend:
+
+```powershell
+# Activar entorno Conda
+conda activate EncuestasBackendAzure
+
+# Ir al directorio del backend o ejecutar desde la raíz del proyecto
+cd F:\ETL_DITIC\EncuestasPercepciónAzure\backend
+
+# Iniciar el servidor
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
+```
+
+> **Nota:** Para el backend se debe usar siempre el entorno `EncuestasBackendAzure`.
+
+---
+
 ## Estructura del proyecto
 
 - `backend/`: aplicación Python FastAPI que expone la API y orquesta los jobs.
